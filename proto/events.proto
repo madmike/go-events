@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package aulinq.events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/aulinq/aulinq/services/libraries/events/proto";
+
+// Envelope wraps every event with routing and tracing metadata.
+// In the binary version, 'data' contains the serialized bytes of the domain message.
+message Envelope {
+  string id = 1;              // UUID v7
+  string subject = 2;         // NATS subject
+  string tenant_id = 3;
+  google.protobuf.Timestamp published_at = 4;
+  string trace_id = 5;        // OpenTelemetry trace propagation
+  bytes data = 6;             // Serialized domain message (InboundMessage, etc.)
+}
+
+// InboundMessage represents a message received from any platform.
+message InboundMessage {
+  string platform = 1;        // telegram, whatsapp, etc.
+  string tenant_id = 2;
+  string bot_id = 3;
+  string chat_id = 4;
+  string thread_id = 5;
+  string from_user_id = 6;
+  string username = 7;
+
+  string text = 8;
+  repeated Attachment attachments = 9;
+  
+  string deep_link = 10;      // From /start commands
+  string callback_data = 11;  // From inline buttons
+  
+  string message_id = 12;
+  google.protobuf.Timestamp received_at = 13;
+  
+  bytes raw_payload = 14;     // Original platform JSON for fallback
+}
+
+// OutboundMessage represents a message to be sent to a platform.
+message OutboundMessage {
+  string platform = 1;
+  string tenant_id = 2;
+  string bot_id = 3;
+  string chat_id = 4;
+  string thread_id = 5;
+  string reply_to = 6;
+
+  string text = 7;
+  string parse_mode = 8;      // html, markdown
+  repeated Attachment attachments = 9;
+  
+  repeated ButtonRow buttons = 10;
+  
+  bool disable_preview = 11;
+  bool disable_notification = 12;
+}
+
+message Attachment {
+  string type = 1;            // image, audio, video, document, voice
+  string mime_type = 2;
+  string file_name = 3;
+  string url = 4;             // Storage URL
+  string file_id = 5;         // Platform-native ID
+  bytes data = 6;             // Raw binary for small files (voice notes)
+  string caption = 7;
+}
+
+message ButtonRow {
+  repeated Button buttons = 1;
+}
+
+message Button {
+  string text = 1;
+  string callback_data = 2;
+  string url = 3;
+}

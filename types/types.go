@@ -303,6 +303,17 @@ const (
 	AgentEventToolRes  AgentEventType = "tool_res"  // tool execution result
 	AgentEventTyping   AgentEventType = "typing"    // typing indicator
 	AgentEventError    AgentEventType = "error"
+
+	// UI event types — consumed by the dashboard onboarding canvas frontend.
+	AgentEventUICard      AgentEventType = "ui.card"      // render an inline configuration block (legacy)
+	AgentEventUIChecklist AgentEventType = "ui.checklist" // update the left-rail milestone progress
+	AgentEventUIPreview   AgentEventType = "ui.preview"   // update the right-pane assistant preview
+	AgentEventUIStage     AgentEventType = "ui.stage"     // full stage/layout switch on the canvas
+	AgentEventUIRender    AgentEventType = "ui.render"    // mutate a single slot with a widget
+	AgentEventUIClear     AgentEventType = "ui.clear"     // empty a single slot
+	AgentEventToolStart    AgentEventType = "tool.start"    // tool execution started (show status chip)
+	AgentEventToolEnd      AgentEventType = "tool.end"      // tool execution completed
+	AgentEventUISuggestions AgentEventType = "ui.suggestions" // offer clickable suggestion chips
 )
 
 // AgentStreamEvent is published by agent-runtime during execution to support
@@ -324,10 +335,54 @@ type AgentStreamEvent struct {
 	// - done: final text or JSON metrics
 	// - tool_call: tool name and call ID
 	// - tool_res: tool output JSON
+	// - tool.start / tool.end: tool name
 	Content string `json:"content,omitempty"`
 
 	// Metadata contains type-specific structured data
 	Metadata map[string]any `json:"metadata,omitempty"`
 
+	// UI is populated for AgentEventUICard / AgentEventUIChecklist / AgentEventUIPreview events.
+	UI *AgentUIPayload `json:"ui,omitempty"`
+
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// AgentUIPayload carries the structured data for UI-targeted stream events.
+// The canvas frontend inspects these fields to decide which component to render.
+type AgentUIPayload struct {
+	// Block names the legacy configuration section: "channels" | "knowledge" | "tools" | "brain" | "identity".
+	Block string `json:"block,omitempty"`
+	// AgentID is the customer assistant whose configuration block to render.
+	AgentID string `json:"agent_id,omitempty"`
+	// Props carries any additional block- or widget-specific display properties.
+	Props map[string]any `json:"props,omitempty"`
+	// Steps lists milestone updates for the onboarding checklist rail.
+	Steps []AgentUIChecklistStep `json:"steps,omitempty"`
+	// Summary carries an updated assistant preview payload.
+	Summary map[string]any `json:"summary,omitempty"`
+
+	// Stage names the active onboarding stage, e.g. "welcome", "channels", "go-live".
+	Stage string `json:"stage,omitempty"`
+	// Layout is the canvas layout preset for this stage: "single" | "two-col" | "three-col" | "hero-stack".
+	Layout string `json:"layout,omitempty"`
+	// Slots maps slot name → widget descriptor for a ui.stage event.
+	// Each value is an object: {"widget": "identity-form", "props": {...}}.
+	Slots map[string]any `json:"slots,omitempty"`
+	// Slot is the target slot name for ui.render / ui.clear events.
+	Slot string `json:"slot,omitempty"`
+	// Widget is the registry key of the widget to render in Slot.
+	Widget string `json:"widget,omitempty"`
+	// Mode is "replace" (default) or "patch" for ui.render.
+	Mode string `json:"mode,omitempty"`
+
+	// Items carries suggestion chips for ui.suggestions: each is {label, send}.
+	Items []map[string]any `json:"items,omitempty"`
+}
+
+// AgentUIChecklistStep represents one onboarding milestone and its completion state.
+type AgentUIChecklistStep struct {
+	Key       string `json:"key"`    // stable identifier, e.g. "profile", "first-assistant"
+	Label     string `json:"label"`  // human-readable label
+	Done      bool   `json:"done"`
+	InProgress bool  `json:"in_progress,omitempty"`
 }

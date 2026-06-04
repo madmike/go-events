@@ -70,8 +70,8 @@ type OutboundMessage struct {
 	// Inline keyboard rows
 	Buttons [][]Button `json:"buttons,omitempty"`
 
-	DisablePreview      bool `json:"disable_preview,omitempty"`
-	DisableNotification bool `json:"disable_notification,omitempty"`
+	DisablePreview      bool   `json:"disable_preview,omitempty"`
+	DisableNotification bool   `json:"disable_notification,omitempty"`
 	ChatAction          string `json:"chat_action,omitempty"` // typing | upload_photo | …
 
 	TraceID string `json:"trace_id,omitempty"` // UUID v7 for distributed tracing
@@ -203,18 +203,20 @@ type BillingSubscriptionUpdated struct {
 // BillingUsageRecorded is published by agent-runtime after message execution
 // completes and cost is captured. It feeds usage analytics and billing aggregation.
 type BillingUsageRecorded struct {
-	TenantID          string    `json:"tenant_id"`
-	AssistantID       string    `json:"assistant_id"`
-	MessageID         string    `json:"message_id"`
-	Tier              string    `json:"tier"`               // simple | complex | default
-	Provider          string    `json:"provider"`           // openai | gemini | …
-	Model             string    `json:"model"`              // gpt-4o | claude-3-opus | …
-	InputTokens       float64        `json:"input_tokens"`
-	OutputTokens      float64        `json:"output_tokens"`
-	CachedInputTokens float64        `json:"cached_input_tokens"`
+	TenantID          string  `json:"tenant_id"`
+	AssistantID       string  `json:"assistant_id"`
+	MessageID         string  `json:"message_id"`
+	UsageScope        string  `json:"usage_scope,omitempty"` // plan | system_assistant | api
+	SystemKey         string  `json:"system_key,omitempty"`  // set for system assistant runs
+	Tier              string  `json:"tier"`                  // simple | complex | default
+	Provider          string  `json:"provider"`              // openai | gemini | …
+	Model             string  `json:"model"`                 // gpt-4o | claude-3-opus | …
+	InputTokens       float64 `json:"input_tokens"`
+	OutputTokens      float64 `json:"output_tokens"`
+	CachedInputTokens float64 `json:"cached_input_tokens"`
 	// Cost is stored in micro-cents so sub-cent per-message costs aren't truncated.
-	CostMicroCents    int64     `json:"cost_micro_cents"`
-	HoldID            string    `json:"hold_id"` // credit hold UUID
+	CostMicroCents int64  `json:"cost_micro_cents"`
+	HoldID         string `json:"hold_id"` // credit hold UUID
 
 	// Breakdown contains detailed cost/token decomposition (e.g. classifier, embedding)
 	Breakdown map[string]any `json:"breakdown,omitempty"`
@@ -257,17 +259,16 @@ type IdentityAccountEvent struct {
 }
 
 // MessengerAccountConfig is the subset of account configuration the gateway needs.
+// Secrets are stored in the vault and referenced by Ref fields; plaintext fields
+// (api_key, api_secret, webhook_secret) have been removed for security (see C7).
 type MessengerAccountConfig struct {
-	Preset           string         `json:"preset"` // telegram_bot | whatsapp_cloud | …
-	APIKey           string         `json:"api_key,omitempty"`           // plaintext for immediate use (legacy)
-	APIKeyRef        string         `json:"api_key_ref,omitempty"`       // vault ref (new)
-	APISecret        string         `json:"api_secret,omitempty"`        // plaintext for immediate use (legacy)
-	APISecretRef     string         `json:"api_secret_ref,omitempty"`    // vault ref (new)
+	Preset           string         `json:"preset"`                   // telegram_bot | whatsapp_cloud | …
+	APIKeyRef        string         `json:"api_key_ref,omitempty"`    // vault ref
+	APISecretRef     string         `json:"api_secret_ref,omitempty"` // vault ref
 	ExternalID       string         `json:"external_id,omitempty"`
 	PublicWebhookURL string         `json:"public_webhook_url"`
-	WebhookSecret    string         `json:"webhook_secret,omitempty"`    // plaintext for immediate use (legacy)
-	WebhookSecretRef string         `json:"webhook_secret_ref,omitempty"` // vault ref (new)
-	WebhookStatus    string         `json:"webhook_status,omitempty"`    // pending | active | failed | password_needed
+	WebhookSecretRef string         `json:"webhook_secret_ref,omitempty"` // vault ref
+	WebhookStatus    string         `json:"webhook_status,omitempty"`     // pending | active | failed | password_needed
 	Options          map[string]any `json:"options,omitempty"`
 }
 
@@ -305,14 +306,15 @@ const (
 	AgentEventError    AgentEventType = "error"
 
 	// UI event types — consumed by the dashboard onboarding canvas frontend.
-	AgentEventUICard      AgentEventType = "ui.card"      // render an inline configuration block (legacy)
-	AgentEventUIChecklist AgentEventType = "ui.checklist" // update the left-rail milestone progress
-	AgentEventUIPreview   AgentEventType = "ui.preview"   // update the right-pane assistant preview
-	AgentEventUIStage     AgentEventType = "ui.stage"     // full stage/layout switch on the canvas
-	AgentEventUIRender    AgentEventType = "ui.render"    // mutate a single slot with a widget
-	AgentEventUIClear     AgentEventType = "ui.clear"     // empty a single slot
-	AgentEventToolStart    AgentEventType = "tool.start"    // tool execution started (show status chip)
-	AgentEventToolEnd      AgentEventType = "tool.end"      // tool execution completed
+	AgentEventUICard        AgentEventType = "ui.card"        // render an inline configuration block (legacy)
+	AgentEventUIChecklist   AgentEventType = "ui.checklist"   // update the left-rail milestone progress
+	AgentEventUIPreview     AgentEventType = "ui.preview"     // update the right-pane assistant preview
+	AgentEventUIStage       AgentEventType = "ui.stage"       // full stage/layout switch on the canvas
+	AgentEventUIRender      AgentEventType = "ui.render"      // mutate a single slot with a widget
+	AgentEventUIClear       AgentEventType = "ui.clear"       // empty a single slot
+	AgentEventUINavigate    AgentEventType = "ui.navigate"    // navigate to a specific route/href
+	AgentEventToolStart     AgentEventType = "tool.start"     // tool execution started (show status chip)
+	AgentEventToolEnd       AgentEventType = "tool.end"       // tool execution completed
 	AgentEventUISuggestions AgentEventType = "ui.suggestions" // offer clickable suggestion chips
 )
 
@@ -374,6 +376,10 @@ type AgentUIPayload struct {
 	Widget string `json:"widget,omitempty"`
 	// Mode is "replace" (default) or "patch" for ui.render.
 	Mode string `json:"mode,omitempty"`
+	// Href is the destination for ui.navigate events.
+	Href string `json:"href,omitempty"`
+	// Replace chooses history replacement for ui.navigate when true.
+	Replace bool `json:"replace,omitempty"`
 
 	// Items carries suggestion chips for ui.suggestions: each is {label, send}.
 	Items []map[string]any `json:"items,omitempty"`
@@ -381,8 +387,8 @@ type AgentUIPayload struct {
 
 // AgentUIChecklistStep represents one onboarding milestone and its completion state.
 type AgentUIChecklistStep struct {
-	Key       string `json:"key"`    // stable identifier, e.g. "profile", "first-assistant"
-	Label     string `json:"label"`  // human-readable label
-	Done      bool   `json:"done"`
-	InProgress bool  `json:"in_progress,omitempty"`
+	Key        string `json:"key"`   // stable identifier, e.g. "profile", "first-assistant"
+	Label      string `json:"label"` // human-readable label
+	Done       bool   `json:"done"`
+	InProgress bool   `json:"in_progress,omitempty"`
 }

@@ -106,6 +106,12 @@ func (cs *Consumer) Subscribe(ctx context.Context, cfg ConsumerConfig, handler H
 				return nil
 			}
 			cs.log.Warn("consumer next error", telemetry.Err(err))
+			// Avoid high-CPU tight loop on connection / heartbeat errors
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(1 * time.Second):
+			}
 			continue
 		}
 		cs.log.Info("consumer received message", telemetry.String("subject", msg.Subject()))
